@@ -340,29 +340,7 @@ const companionOptions = {
     allowLocalUrls: true
 };
 
-// Correctly parse the public-facing URL for Companion's configuration
-const companionUrl = process.env.COMPANION_URL || 'https://127.0.0.1:3020';
-let companionHost;
-let companionProtocol;
-
-try {
-    const url = new URL(companionUrl);
-    companionHost = url.host;
-    companionProtocol = url.protocol.slice(0, -1); // remove ':'
-} catch (error) {
-    console.error(`Invalid COMPANION_URL: ${companionUrl}. Using default local values.`);
-    companionHost = '127.0.0.1:3020';
-    companionProtocol = 'https';
-}
-
-companionOptions.server = {
-    host: companionHost,
-    protocol: companionProtocol,
-};
-
-// Companion needs to know its own URL is a valid place to download from
-companionOptions.uploadUrls = [companionUrl].concat(companionOptions.uploadUrls || []);
-
+const companionUrl = process.env.COMPANION_URL || `${companionOptions.server.protocol}://${companionOptions.server.host}`;
 
 console.log('--- Companion Configuration ---');
 console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
