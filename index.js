@@ -8,6 +8,7 @@ const companion = require('@uppy/companion');
 const session = require('express-session');
 const { createClient } = require('redis');
 const RedisStore = require('connect-redis').default;
+const cors = require('cors');
 
 // Dynamic import for node-fetch v3 (ESM)
 let fetch;
@@ -17,6 +18,34 @@ let fetch;
 })();
 
 const app = express();
+
+// CORS configuration
+const allowedOrigins = [
+    'http://localhost',
+    'https://dev.kboodle.com',
+    'https://kboodle.local',
+    'http://kboodle.local',
+    'https://kbooble.com',
+    'https://staging.kboodle.com',
+    'https://staging2.kboodle.com'
+];
+
+app.use(cors({
+    origin: function (origin, callback) {
+        // allow requests with no origin (like mobile apps or curl requests)
+        if (!origin) return callback(null, true);
+        if (allowedOrigins.indexOf(origin) === -1) {
+            const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+            return callback(new Error(msg), false);
+        }
+        return callback(null, true);
+    },
+    credentials: true,
+    methods: "GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS",
+    preflightContinue: false,
+    optionsSuccessStatus: 204
+}));
+
 
 // Initialize Redis Client and Store
 let redisStore;
@@ -50,22 +79,12 @@ app.use((req, res, next) => {
     next();
 });
 
-// Pre-flight handlers
-app.options('/google-picker/get', (req, res) => {
-    setCorsHeaders(req, res);
-    res.status(200).end();
-});
-
-app.options('/google-picker/thumbnail', (req, res) => {
-    setCorsHeaders(req, res);
-    res.status(200).end();
-});
+// Pre-flight handlers are now handled by the cors middleware
 
 // Google Picker thumbnail endpoint - serves small thumbnails for preview
 app.get('/google-picker/thumbnail', async (req, res) => {
     try {
-        // Set CORS headers dynamically
-        setCorsHeaders(req, res);
+        // CORS headers are now handled by the cors middleware
 
         const googlePhotosUrl = req.query.googlePhotosUrl;
         const accessToken = req.query.accessToken;
@@ -121,8 +140,7 @@ app.get('/google-picker/thumbnail', async (req, res) => {
 // Google Picker endpoint (what the GooglePhotosPicker plugin expects)
 app.get('/google-picker/get', async (req, res) => {
     try {
-        // Set CORS headers dynamically
-        setCorsHeaders(req, res);
+        // CORS headers are now handled by the cors middleware
 
         // Check if we have file ID and file name
         const fileId = req.query.fileId;
@@ -201,24 +219,10 @@ app.get('/google-picker/get', async (req, res) => {
     }
 });
 
-function setCorsHeaders(req, res) {
-    const allowedOrigins = companionOptions.corsOrigins;
-    const origin = req.headers.origin;
-    if (allowedOrigins.includes(origin)) {
-        res.set({
-            'Access-Control-Allow-Origin': origin,
-            'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-            'Access-Control-Allow-Credentials': 'true'
-        });
-    }
-}
-
 // Unsplash download endpoint - handles downloading Unsplash images
 app.get('/unsplash/get/:fileId', async (req, res) => {
     try {
-        // Set CORS headers dynamically
-        setCorsHeaders(req, res);
+        // CORS headers are now handled by the cors middleware
 
         const fileId = req.params.fileId;
 
@@ -327,15 +331,7 @@ const companionOptions = {
         host: process.env.COMPANION_HOST || '127.0.0.1:3020',
         protocol: process.env.COMPANION_PROTOCOL || 'https',
     },
-    corsOrigins: [
-        'http://localhost',
-        'https://dev.kboodle.com',
-        'https://kboodle.local',
-        'http://kboodle.local',
-        'https://kbooble.com',
-        'https://staging.kboodle.com',
-        'https://staging2.kboodle.com'
-    ],
+    corsOrigins: allowedOrigins,
     filePath: process.env.NODE_ENV === 'production' ? '/tmp' : './data',
     secret: process.env.COMPANION_SECRET || 'a-very-secret-string-for-local-dev',
     debug: true,
