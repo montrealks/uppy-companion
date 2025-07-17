@@ -32,12 +32,15 @@ const allowedOrigins = [
 
 app.use(cors({
     origin: function (origin, callback) {
+        console.log(`[CORS] Request from origin: ${origin}`);
         // allow requests with no origin (like mobile apps or curl requests)
         if (!origin) return callback(null, true);
         if (allowedOrigins.indexOf(origin) === -1) {
-            const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+            const msg = `The CORS policy for this site does not allow access from the specified Origin: ${origin}`;
+            console.error(`[CORS] Blocked origin: ${origin}`);
             return callback(new Error(msg), false);
         }
+        console.log(`[CORS] Allowed origin: ${origin}`);
         return callback(null, true);
     },
     credentials: true,
@@ -221,6 +224,8 @@ app.get('/google-picker/get', async (req, res) => {
 
 // Unsplash download endpoint - handles downloading Unsplash images
 app.get('/unsplash/get/:fileId', async (req, res) => {
+    console.log(`[Unsplash Download] Received request for file: ${req.params.fileId} from origin: ${req.headers.origin}`);
+    console.log('[Unsplash Download] Request Headers:', JSON.stringify(req.headers, null, 2));
     try {
         // CORS headers are now handled by the cors middleware
 
@@ -292,6 +297,8 @@ app.get('/unsplash/get/:fileId', async (req, res) => {
 
 // Google Photos download endpoint
 app.get('/googlephotos/get/:fileId(*)', async (req, res) => {
+    console.log(`[Google Photos Download] Received request for file: ${req.params.fileId} from origin: ${req.headers.origin}`);
+    console.log('[Google Photos Download] Request Headers:', JSON.stringify(req.headers, null, 2));
     try {
         // The companion should have the file data stored internally
         // Let's try to access it through the companion's internal mechanisms
@@ -351,9 +358,15 @@ console.log(`1. For modern providers (recommended): ${companionUrl}/drive/redire
 console.log(`2. For older providers: ${companionUrl}/googlephotos/redirect`);
 console.log('Unsplash is configured with API key ending in:', (process.env.UNSPLASH_ACCESS_KEY || '...').slice(-6));
 console.log('------------------------------------');
+console.log('--- Full Companion Options ---', JSON.stringify(companionOptions, null, 2));
 
-const { app: companionApp } = companion.app(companionOptions);
-app.use(companionApp);
+
+try {
+    const { app: companionApp } = companion.app(companionOptions);
+    app.use(companionApp);
+} catch (error) {
+    console.error('!!! FATAL: Companion failed to initialize !!!', error);
+}
 
 
 if (process.env.NODE_ENV !== 'production') {
