@@ -6,6 +6,8 @@ const fs = require('fs');
 const express = require('express');
 const companion = require('@uppy/companion');
 const session = require('express-session');
+const { createClient } = require('redis');
+const RedisStore = require('connect-redis').default;
 
 // Dynamic import for node-fetch v3 (ESM)
 let fetch;
@@ -16,12 +18,26 @@ let fetch;
 
 const app = express();
 
+// Initialize Redis Client and Store
+let redisStore;
+if (process.env.REDIS_URL) {
+    const redisClient = createClient({ url: process.env.REDIS_URL });
+    redisClient.connect().catch(console.error);
+    redisStore = new RedisStore({ client: redisClient });
+}
+
+
 // Add session middleware
 app.use(session({
+    store: redisStore, // Use RedisStore in production
     secret: process.env.COMPANION_SECRET || 'a-very-secret-string-for-local-dev',
     resave: false,
     saveUninitialized: false,
-    cookie: { secure: false }
+    cookie: {
+        secure: process.env.NODE_ENV === 'production', // Use secure cookies in production
+        httpOnly: true,
+        maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    }
 }));
 
 // Add body parsing middleware
@@ -320,7 +336,7 @@ const companionOptions = {
         'https://staging.kboodle.com',
         'https://staging2.kboodle.com'
     ],
-    filePath: './data',
+    filePath: process.env.NODE_ENV === 'production' ? '/tmp' : './data',
     secret: process.env.COMPANION_SECRET || 'a-very-secret-string-for-local-dev',
     debug: true,
     enableGooglePickerEndpoint: true,
@@ -328,29 +344,34 @@ const companionOptions = {
     allowLocalUrls: true
 };
 
-const protocol = process.env.COMPANION_PROTOCOL || 'https';
-const host = process.env.COMPANION_HOST || '127.0.0.1:3020';
-console.log('--- Companion Redirect URI Debug ---');
+const companionUrl = process.env.COMPANION_URL || `${companionOptions.server.protocol}://${companionOptions.server.host}`;
+
+console.log('--- Companion Configuration ---');
+console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+console.log(`Companion URL: ${companionUrl}`);
+console.log(`File Path: ${companionOptions.filePath}`);
 console.log('Verifying Redirect URIs for Google. Please ensure ONE of the following is in your Google Console "Authorized redirect URIs":');
-console.log(`1. For modern providers (recommended): ${protocol}://${host}/drive/redirect`);
-console.log(`2. For older providers: ${protocol}://${host}/googlephotos/redirect`);
-console.log('');
+console.log(`1. For modern providers (recommended): ${companionUrl}/drive/redirect`);
+console.log(`2. For older providers: ${companionUrl}/googlephotos/redirect`);
 console.log('Unsplash is configured with API key ending in:', (process.env.UNSPLASH_ACCESS_KEY || '...').slice(-6));
 console.log('------------------------------------');
 
 const { app: companionApp } = companion.app(companionOptions);
 app.use(companionApp);
 
-const sslOptions = {
-    key: fs.readFileSync('./127.0.0.1+1-key.pem'),
-    cert: fs.readFileSync('./127.0.0.1+1.pem')
-};
 
-const server = https.createServer(sslOptions, app).listen(3020, '127.0.0.1', () => {
-    console.log(`Uppy Companion listening on ${protocol}://${host}`);
-    console.log('Companion server is now running on HTTPS.');
-});
+if (process.env.NODE_ENV !== 'production') {
+    // Local development: Use HTTPS with mkcert certificates
+    const sslOptions = {
+        key: fs.readFileSync('./127.0.0.1+1-key.pem'),
+        cert: fs.readFileSync('./127.0.0.1+1.pem')
+    };
 
-companion.socket(server, {
-    app: companionApp
-});
+    const server = https.createServer(sslOptions, app).listen(3020, '127.0.0.1', () => {
+        console.log(`Uppy Companion listening locally on https://127.0.0.1:3020`);
+    });
+    companion.socket(server, { app: companionApp });
+} else {
+    // Production: Export the app for Vercel
+    module.exports = app;
+}
