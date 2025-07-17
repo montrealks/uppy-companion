@@ -1,0 +1,354 @@
+require('dotenv').config();
+const https = require('https');
+const fs = require('fs');
+const express = require('express');
+const companion = require('@uppy/companion');
+const session = require('express-session');
+
+// Dynamic import for node-fetch v3 (ESM)
+let fetch;
+(async () => {
+    const { default: nodeFetch } = await import('node-fetch');
+    fetch = nodeFetch;
+})();
+
+const app = express();
+
+// Add session middleware
+app.use(session({
+    secret: process.env.COMPANION_SECRET || 'a-very-secret-string-for-local-dev',
+    resave: false,
+    saveUninitialized: false,
+    cookie: { secure: false }
+}));
+
+// Add body parsing middleware
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Add request logging middleware
+app.use((req, res, next) => {
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+    next();
+});
+
+// Pre-flight handlers
+app.options('/google-picker/get', (req, res) => {
+    setCorsHeaders(req, res);
+    res.status(200).end();
+});
+
+app.options('/google-picker/thumbnail', (req, res) => {
+    setCorsHeaders(req, res);
+    res.status(200).end();
+});
+
+// Google Picker thumbnail endpoint - serves small thumbnails for preview
+app.get('/google-picker/thumbnail', async (req, res) => {
+    try {
+        // Set CORS headers dynamically
+        setCorsHeaders(req, res);
+
+        const googlePhotosUrl = req.query.googlePhotosUrl;
+        const accessToken = req.query.accessToken;
+
+        if (!googlePhotosUrl || !accessToken) {
+            return res.status(400).json({ error: 'Missing googlePhotosUrl or accessToken' });
+        }
+
+        // Check if fetch is available
+        if (!fetch) {
+            throw new Error('Fetch not yet initialized. Please try again in a moment.');
+        }
+
+        // Create thumbnail URL (=s200 means 200px max dimension)
+        let thumbnailUrl = googlePhotosUrl;
+        if (googlePhotosUrl.includes('googleusercontent.com')) {
+            thumbnailUrl = googlePhotosUrl.includes('=s') ?
+                googlePhotosUrl.replace(/=s\d+/, '=s200') :
+                `${googlePhotosUrl}=s200`;
+        }
+
+        // Download the thumbnail from Google Photos
+        const response = await fetch(thumbnailUrl, {
+            headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'User-Agent': 'Mozilla/5.0 (compatible; Uppy-Companion/1.0)'
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to download thumbnail: ${response.status} ${response.statusText}`);
+        }
+
+        const thumbnailBuffer = await response.buffer();
+
+        // Get the content type from the response or default to image/jpeg
+        const contentType = response.headers.get('content-type') || 'image/jpeg';
+
+        res.set({
+            'Content-Type': contentType,
+            'Content-Length': thumbnailBuffer.length,
+            'Cache-Control': 'public, max-age=3600' // Cache for 1 hour
+        });
+
+        res.send(thumbnailBuffer);
+
+    } catch (error) {
+        console.error('Thumbnail error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Google Picker endpoint (what the GooglePhotosPicker plugin expects)
+app.get('/google-picker/get', async (req, res) => {
+    try {
+        // Set CORS headers dynamically
+        setCorsHeaders(req, res);
+
+        // Check if we have file ID and file name
+        const fileId = req.query.fileId;
+        const fileName = req.query.fileName;
+        const googlePhotosUrl = req.query.googlePhotosUrl;
+        const accessToken = req.query.accessToken;
+        const googleFileId = req.query.googleFileId;
+
+        if (googlePhotosUrl && accessToken) {
+            // Try to download the actual file from Google Photos
+            // The fileId format is: uppy-screenshot/20250711/091119/grok/jpg-2v-2v-2v-1e-image/jpeg-null
+            // We need to decode this and get the actual Google Photos URL
+
+            try {
+                // Check if fetch is available
+                if (!fetch) {
+                    throw new Error('Fetch not yet initialized. Please try again in a moment.');
+                }
+
+                // For Google Photos, we need to use the proper API endpoint
+                // The googlePhotosUrl is typically a base URL that needs parameters
+                let finalUrl = googlePhotosUrl;
+
+                // Add size parameter if not present (required for Google Photos)
+                if (googlePhotosUrl.includes('googleusercontent.com') && !googlePhotosUrl.includes('=s')) {
+                    finalUrl = `${googlePhotosUrl}=s2048`;
+                }
+
+                // Download the actual file from Google Photos using the provided URL and access token
+                const response = await fetch(finalUrl, {
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`,
+                        'User-Agent': 'Mozilla/5.0 (compatible; Uppy-Companion/1.0)'
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Failed to download from Google Photos: ${response.status} ${response.statusText}`);
+                }
+
+                const imageBuffer = await response.buffer();
+
+                // Get the content type from the response or default to image/jpeg
+                const contentType = response.headers.get('content-type') || 'image/jpeg';
+
+                res.set({
+                    'Content-Type': contentType,
+                    'Content-Length': imageBuffer.length,
+                    'Content-Disposition': `inline; filename="${fileName}"`
+                });
+
+                res.send(imageBuffer);
+
+            } catch (error) {
+                console.error('Error downloading from Google Photos:', error);
+                throw error;
+            }
+        } else {
+            // Fallback to small test image
+            const imageBuffer = Buffer.from(
+                'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChAGAHvuTiAAAAABJRU5ErkJggg==',
+                'base64'
+            );
+
+            res.set({
+                'Content-Type': 'image/png',
+                'Content-Length': imageBuffer.length,
+                'Content-Disposition': 'inline; filename="test-image.png"'
+            });
+
+            res.send(imageBuffer);
+        }
+    } catch (error) {
+        console.error('Google Picker error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+function setCorsHeaders(req, res) {
+    const allowedOrigins = companionOptions.corsOrigins;
+    const origin = req.headers.origin;
+    if (allowedOrigins.includes(origin)) {
+        res.set({
+            'Access-Control-Allow-Origin': origin,
+            'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+            'Access-Control-Allow-Credentials': 'true'
+        });
+    }
+}
+
+// Unsplash download endpoint - handles downloading Unsplash images
+app.get('/unsplash/get/:fileId', async (req, res) => {
+    try {
+        // Set CORS headers dynamically
+        setCorsHeaders(req, res);
+
+        const fileId = req.params.fileId;
+
+        // Check if fetch is available
+        if (!fetch) {
+            throw new Error('Fetch not yet initialized. Please try again in a moment.');
+        }
+
+        // Get the image details from Unsplash API
+        const unsplashApiUrl = `https://api.unsplash.com/photos/${fileId}`;
+        const response = await fetch(unsplashApiUrl, {
+            headers: {
+                'Authorization': `Client-ID ${companionOptions.providerOptions.unsplash.key}`,
+                'User-Agent': 'Uppy-Companion/1.0'
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to get Unsplash image details: ${response.status} ${response.statusText}`);
+        }
+
+        const imageData = await response.json();
+
+        // Trigger download tracking (required by Unsplash API)
+        if (imageData.links && imageData.links.download_location) {
+            try {
+                await fetch(imageData.links.download_location, {
+                    headers: {
+                        'Authorization': `Client-ID ${companionOptions.providerOptions.unsplash.key}`,
+                        'User-Agent': 'Uppy-Companion/1.0'
+                    }
+                });
+            } catch (error) {
+                console.warn('Failed to trigger download tracking:', error.message);
+            }
+        }
+
+        // Download the actual image
+        const imageResponse = await fetch(imageData.urls.full, {
+            headers: {
+                'User-Agent': 'Uppy-Companion/1.0'
+            }
+        });
+
+        if (!imageResponse.ok) {
+            throw new Error(`Failed to download Unsplash image: ${imageResponse.status} ${imageResponse.statusText}`);
+        }
+
+        const imageBuffer = await imageResponse.buffer();
+
+        // Get the content type from the response or default to image/jpeg
+        const contentType = imageResponse.headers.get('content-type') || 'image/jpeg';
+
+        res.set({
+            'Content-Type': contentType,
+            'Content-Length': imageBuffer.length,
+            'Content-Disposition': `inline; filename="${imageData.id}.jpg"`
+        });
+
+        res.send(imageBuffer);
+
+    } catch (error) {
+        console.error('Unsplash download error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Google Photos download endpoint
+app.get('/googlephotos/get/:fileId(*)', async (req, res) => {
+    try {
+        // The companion should have the file data stored internally
+        // Let's try to access it through the companion's internal mechanisms
+
+        // For now, let's try to decode the file ID to understand its structure
+        const fileId = req.params.fileId;
+
+        // Try to find the file in the companion's internal file cache
+        // The companion should have stored the file metadata when it was selected
+
+        // Let's return a proper error for now but with more info
+        res.status(501).json({
+            error: 'Google Photos download implementation in progress',
+            fileId: fileId,
+            message: 'Working on implementing the actual download from Google Photos API',
+            sessionExists: !!req.session,
+            hasGooglePhotosSession: !!(req.session && req.session.googlephotos)
+        });
+    } catch (error) {
+        console.error('Google Photos download error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+const companionOptions = {
+    providerOptions: {
+        drive: {
+            key: process.env.GOOGLE_CLIENT_ID,
+            secret: process.env.GOOGLE_CLIENT_SECRET,
+            scope: ['https://www.googleapis.com/auth/photoslibrary.readonly']
+        },
+        unsplash: {
+            key: process.env.UNSPLASH_ACCESS_KEY
+        }
+    },
+    server: {
+        host: process.env.COMPANION_HOST || '127.0.0.1:3020',
+        protocol: process.env.COMPANION_PROTOCOL || 'https',
+    },
+    corsOrigins: [
+        'http://localhost',
+        'https://dev.kboodle.com',
+        'https://kboodle.local',
+        'http://kboodle.local',
+        'https://kbooble.com',
+        'https://staging.kboodle.com',
+        'https://staging2.kboodle.com'
+    ],
+    filePath: './data',
+    secret: process.env.COMPANION_SECRET || 'a-very-secret-string-for-local-dev',
+    debug: true,
+    enableGooglePickerEndpoint: true,
+    uploadUrls: [`${process.env.COMPANION_PROTOCOL || 'https'}://${process.env.COMPANION_HOST || '127.0.0.1:3020'}`],
+    allowLocalUrls: true
+};
+
+const protocol = process.env.COMPANION_PROTOCOL || 'https';
+const host = process.env.COMPANION_HOST || '127.0.0.1:3020';
+console.log('--- Companion Redirect URI Debug ---');
+console.log('Verifying Redirect URIs for Google. Please ensure ONE of the following is in your Google Console "Authorized redirect URIs":');
+console.log(`1. For modern providers (recommended): ${protocol}://${host}/drive/redirect`);
+console.log(`2. For older providers: ${protocol}://${host}/googlephotos/redirect`);
+console.log('');
+console.log('Unsplash is configured with API key ending in:', (process.env.UNSPLASH_ACCESS_KEY || '...').slice(-6));
+console.log('------------------------------------');
+
+const { app: companionApp } = companion.app(companionOptions);
+app.use(companionApp);
+
+const sslOptions = {
+    key: fs.readFileSync('./127.0.0.1+1-key.pem'),
+    cert: fs.readFileSync('./127.0.0.1+1.pem')
+};
+
+const server = https.createServer(sslOptions, app).listen(3020, '127.0.0.1', () => {
+    console.log(`Uppy Companion listening on ${protocol}://${host}`);
+    console.log('Companion server is now running on HTTPS.');
+});
+
+companion.socket(server, {
+    app: companionApp
+});

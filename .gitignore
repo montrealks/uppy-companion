@@ -1,0 +1,11 @@
+# Environment variables
+.env
+
+# Dependencies
+node_modules/
+
+# SSL Certificate Files
+*.pem
+
+# Uppy temporary upload data
+data/
