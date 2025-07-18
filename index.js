@@ -9,13 +9,7 @@ const session = require('express-session');
 const { createClient } = require('redis');
 const RedisStore = require('connect-redis').default;
 const cors = require('cors');
-
-// Dynamic import for node-fetch v3 (ESM)
-let fetch;
-(async () => {
-    const { default: nodeFetch } = await import('node-fetch');
-    fetch = nodeFetch;
-})();
+const fetch = require('node-fetch');
 
 const app = express();
 
