@@ -86,8 +86,6 @@ app.use((req, res, next) => {
 // Google Picker thumbnail endpoint - serves small thumbnails for preview
 app.get('/google-picker/thumbnail', async (req, res) => {
     try {
-        // CORS headers are now handled by the cors middleware
-
         const googlePhotosUrl = req.query.googlePhotosUrl;
         const accessToken = req.query.accessToken;
 
@@ -95,7 +93,6 @@ app.get('/google-picker/thumbnail', async (req, res) => {
             return res.status(400).json({ error: 'Missing googlePhotosUrl or accessToken' });
         }
 
-        // Create thumbnail URL (=s200 means 200px max dimension)
         let thumbnailUrl = googlePhotosUrl;
         if (googlePhotosUrl.includes('googleusercontent.com')) {
             thumbnailUrl = googlePhotosUrl.includes('=s') ?
@@ -103,7 +100,6 @@ app.get('/google-picker/thumbnail', async (req, res) => {
                 `${googlePhotosUrl}=s200`;
         }
 
-        // Download the thumbnail from Google Photos
         const response = await fetch(thumbnailUrl, {
             agent: customAgent,
             headers: {
@@ -116,15 +112,14 @@ app.get('/google-picker/thumbnail', async (req, res) => {
             throw new Error(`Failed to download thumbnail: ${response.status} ${response.statusText}`);
         }
 
-        const thumbnailBuffer = await response.arrayBuffer();
-
-        // Get the content type from the response or default to image/jpeg
+        const thumbnailArrayBuffer = await response.arrayBuffer();
+        const thumbnailBuffer = Buffer.from(thumbnailArrayBuffer);
         const contentType = response.headers.get('content-type') || 'image/jpeg';
 
         res.set({
             'Content-Type': contentType,
             'Content-Length': thumbnailBuffer.length,
-            'Cache-Control': 'public, max-age=3600' // Cache for 1 hour
+            'Cache-Control': 'public, max-age=3600'
         });
 
         res.send(thumbnailBuffer);
@@ -138,31 +133,15 @@ app.get('/google-picker/thumbnail', async (req, res) => {
 // Google Picker endpoint (what the GooglePhotosPicker plugin expects)
 app.get('/google-picker/get', async (req, res) => {
     try {
-        // CORS headers are now handled by the cors middleware
-
-        // Check if we have file ID and file name
-        const fileId = req.query.fileId;
-        const fileName = req.query.fileName;
-        const googlePhotosUrl = req.query.googlePhotosUrl;
-        const accessToken = req.query.accessToken;
-        const googleFileId = req.query.googleFileId;
+        const { fileId, fileName, googlePhotosUrl, accessToken, googleFileId } = req.query;
 
         if (googlePhotosUrl && accessToken) {
-            // Try to download the actual file from Google Photos
-            // The fileId format is: uppy-screenshot/20250711/091119/grok/jpg-2v-2v-2v-1e-image/jpeg-null
-            // We need to decode this and get the actual Google Photos URL
-
             try {
-                // For Google Photos, we need to use the proper API endpoint
-                // The googlePhotosUrl is typically a base URL that needs parameters
                 let finalUrl = googlePhotosUrl;
-
-                // Add size parameter if not present (required for Google Photos)
                 if (googlePhotosUrl.includes('googleusercontent.com') && !googlePhotosUrl.includes('=s')) {
                     finalUrl = `${googlePhotosUrl}=s2048`;
                 }
 
-                // Download the actual file from Google Photos using the provided URL and access token
                 const response = await fetch(finalUrl, {
                     agent: customAgent,
                     headers: {
@@ -175,9 +154,8 @@ app.get('/google-picker/get', async (req, res) => {
                     throw new Error(`Failed to download from Google Photos: ${response.status} ${response.statusText}`);
                 }
 
-                const imageBuffer = await response.arrayBuffer();
-
-                // Get the content type from the response or default to image/jpeg
+                const imageArrayBuffer = await response.arrayBuffer();
+                const imageBuffer = Buffer.from(imageArrayBuffer);
                 const contentType = response.headers.get('content-type') || 'image/jpeg';
 
                 res.set({
@@ -193,7 +171,6 @@ app.get('/google-picker/get', async (req, res) => {
                 throw error;
             }
         } else {
-            // Fallback to small test image
             const imageBuffer = Buffer.from(
                 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChAGAHvuTiAAAAABJRU5ErkJggg==',
                 'base64'
@@ -216,13 +193,8 @@ app.get('/google-picker/get', async (req, res) => {
 // Unsplash download endpoint - handles downloading Unsplash images
 app.get('/unsplash/get/:fileId', async (req, res) => {
     console.log(`[Unsplash Download] Received request for file: ${req.params.fileId} from origin: ${req.headers.origin}`);
-    console.log('[Unsplash Download] Request Headers:', JSON.stringify(req.headers, null, 2));
     try {
-        // CORS headers are now handled by the cors middleware
-
         const fileId = req.params.fileId;
-
-        // Get the image details from Unsplash API
         const unsplashApiUrl = `https://api.unsplash.com/photos/${fileId}`;
         const response = await fetch(unsplashApiUrl, {
             agent: customAgent,
@@ -238,7 +210,6 @@ app.get('/unsplash/get/:fileId', async (req, res) => {
 
         const imageData = await response.json();
 
-        // Trigger download tracking (required by Unsplash API)
         if (imageData.links && imageData.links.download_location) {
             try {
                 await fetch(imageData.links.download_location, {
@@ -253,21 +224,17 @@ app.get('/unsplash/get/:fileId', async (req, res) => {
             }
         }
 
-        // Download the actual image
         const imageResponse = await fetch(imageData.urls.full, {
             agent: customAgent,
-            headers: {
-                'User-Agent': 'Uppy-Companion/1.0'
-            }
+            headers: { 'User-Agent': 'Uppy-Companion/1.0' }
         });
 
         if (!imageResponse.ok) {
             throw new Error(`Failed to download Unsplash image: ${imageResponse.status} ${imageResponse.statusText}`);
         }
 
-        const imageBuffer = await imageResponse.arrayBuffer();
-
-        // Get the content type from the response or default to image/jpeg
+        const imageArrayBuffer = await imageResponse.arrayBuffer();
+        const imageBuffer = Buffer.from(imageArrayBuffer);
         const contentType = imageResponse.headers.get('content-type') || 'image/jpeg';
 
         res.set({
@@ -287,18 +254,8 @@ app.get('/unsplash/get/:fileId', async (req, res) => {
 // Google Photos download endpoint
 app.get('/googlephotos/get/:fileId(*)', async (req, res) => {
     console.log(`[Google Photos Download] Received request for file: ${req.params.fileId} from origin: ${req.headers.origin}`);
-    console.log('[Google Photos Download] Request Headers:', JSON.stringify(req.headers, null, 2));
     try {
-        // The companion should have the file data stored internally
-        // Let's try to access it through the companion's internal mechanisms
-
-        // For now, let's try to decode the file ID to understand its structure
         const fileId = req.params.fileId;
-
-        // Try to find the file in the companion's internal file cache
-        // The companion should have stored the file metadata when it was selected
-
-        // Let's return a proper error for now but with more info
         res.status(501).json({
             error: 'Google Photos download implementation in progress',
             fileId: fileId,
