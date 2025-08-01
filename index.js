@@ -9,7 +9,12 @@ const session = require('express-session');
 const { createClient } = require('redis');
 const RedisStore = require('connect-redis').default;
 const cors = require('cors');
-const fetch = require('node-fetch');
+
+// Create a custom agent to manage connection pooling, with a threshold of 30.
+const customAgent = new https.Agent({
+    keepAlive: true,
+    maxSockets: 30
+});
 
 const app = express();
 
@@ -90,11 +95,6 @@ app.get('/google-picker/thumbnail', async (req, res) => {
             return res.status(400).json({ error: 'Missing googlePhotosUrl or accessToken' });
         }
 
-        // Check if fetch is available
-        if (!fetch) {
-            throw new Error('Fetch not yet initialized. Please try again in a moment.');
-        }
-
         // Create thumbnail URL (=s200 means 200px max dimension)
         let thumbnailUrl = googlePhotosUrl;
         if (googlePhotosUrl.includes('googleusercontent.com')) {
@@ -105,6 +105,7 @@ app.get('/google-picker/thumbnail', async (req, res) => {
 
         // Download the thumbnail from Google Photos
         const response = await fetch(thumbnailUrl, {
+            agent: customAgent,
             headers: {
                 'Authorization': `Bearer ${accessToken}`,
                 'User-Agent': 'Mozilla/5.0 (compatible; Uppy-Companion/1.0)'
@@ -115,7 +116,7 @@ app.get('/google-picker/thumbnail', async (req, res) => {
             throw new Error(`Failed to download thumbnail: ${response.status} ${response.statusText}`);
         }
 
-        const thumbnailBuffer = await response.buffer();
+        const thumbnailBuffer = await response.arrayBuffer();
 
         // Get the content type from the response or default to image/jpeg
         const contentType = response.headers.get('content-type') || 'image/jpeg';
@@ -152,11 +153,6 @@ app.get('/google-picker/get', async (req, res) => {
             // We need to decode this and get the actual Google Photos URL
 
             try {
-                // Check if fetch is available
-                if (!fetch) {
-                    throw new Error('Fetch not yet initialized. Please try again in a moment.');
-                }
-
                 // For Google Photos, we need to use the proper API endpoint
                 // The googlePhotosUrl is typically a base URL that needs parameters
                 let finalUrl = googlePhotosUrl;
@@ -168,6 +164,7 @@ app.get('/google-picker/get', async (req, res) => {
 
                 // Download the actual file from Google Photos using the provided URL and access token
                 const response = await fetch(finalUrl, {
+                    agent: customAgent,
                     headers: {
                         'Authorization': `Bearer ${accessToken}`,
                         'User-Agent': 'Mozilla/5.0 (compatible; Uppy-Companion/1.0)'
@@ -178,7 +175,7 @@ app.get('/google-picker/get', async (req, res) => {
                     throw new Error(`Failed to download from Google Photos: ${response.status} ${response.statusText}`);
                 }
 
-                const imageBuffer = await response.buffer();
+                const imageBuffer = await response.arrayBuffer();
 
                 // Get the content type from the response or default to image/jpeg
                 const contentType = response.headers.get('content-type') || 'image/jpeg';
@@ -225,14 +222,10 @@ app.get('/unsplash/get/:fileId', async (req, res) => {
 
         const fileId = req.params.fileId;
 
-        // Check if fetch is available
-        if (!fetch) {
-            throw new Error('Fetch not yet initialized. Please try again in a moment.');
-        }
-
         // Get the image details from Unsplash API
         const unsplashApiUrl = `https://api.unsplash.com/photos/${fileId}`;
         const response = await fetch(unsplashApiUrl, {
+            agent: customAgent,
             headers: {
                 'Authorization': `Client-ID ${companionOptions.providerOptions.unsplash.key}`,
                 'User-Agent': 'Uppy-Companion/1.0'
@@ -249,6 +242,7 @@ app.get('/unsplash/get/:fileId', async (req, res) => {
         if (imageData.links && imageData.links.download_location) {
             try {
                 await fetch(imageData.links.download_location, {
+                    agent: customAgent,
                     headers: {
                         'Authorization': `Client-ID ${companionOptions.providerOptions.unsplash.key}`,
                         'User-Agent': 'Uppy-Companion/1.0'
@@ -261,6 +255,7 @@ app.get('/unsplash/get/:fileId', async (req, res) => {
 
         // Download the actual image
         const imageResponse = await fetch(imageData.urls.full, {
+            agent: customAgent,
             headers: {
                 'User-Agent': 'Uppy-Companion/1.0'
             }
@@ -270,7 +265,7 @@ app.get('/unsplash/get/:fileId', async (req, res) => {
             throw new Error(`Failed to download Unsplash image: ${imageResponse.status} ${imageResponse.statusText}`);
         }
 
-        const imageBuffer = await imageResponse.buffer();
+        const imageBuffer = await imageResponse.arrayBuffer();
 
         // Get the content type from the response or default to image/jpeg
         const contentType = imageResponse.headers.get('content-type') || 'image/jpeg';
