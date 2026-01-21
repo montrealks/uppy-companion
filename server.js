@@ -15,6 +15,10 @@ const options = {
       key: process.env.ONEDRIVE_KEY,
       secret: process.env.ONEDRIVE_SECRET,
     },
+    unsplash: {
+      key: process.env.UNSPLASH_KEY,
+      secret: process.env.UNSPLASH_SECRET,
+    },
   },
   server: {
     host: process.env.COMPANION_HOST || 'localhost:3020',
