@@ -1,6 +1,12 @@
 require('dotenv').config();
 const companion = require('@uppy/companion');
 
+// Debug: log env vars on startup
+console.log('Unsplash config:', {
+  key: process.env.COMPANION_UNSPLASH_KEY ? 'SET' : 'MISSING',
+  secret: process.env.COMPANION_UNSPLASH_SECRET ? 'SET' : 'MISSING',
+});
+
 const options = {
   providerOptions: {
     drive: {
@@ -29,7 +35,7 @@ const options = {
   secret: process.env.COMPANION_SECRET,
   uploadUrls: (process.env.UPLOAD_URLS || '').split(',').filter(Boolean),
   corsOrigins: (process.env.CORS_ORIGINS || '').split(',').filter(Boolean),
-  debug: process.env.NODE_ENV !== 'production',
+  debug: true, // Force debug for troubleshooting
   enableGooglePickerEndpoint: process.env.COMPANION_ENABLE_GOOGLE_PICKER_ENDPOINT === 'true',
 };
 
