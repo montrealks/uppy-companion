@@ -1,0 +1,13 @@
+services:
+  companion:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "3020:3020"
+    env_file:
+      - .env
+    volumes:
+      - companion-data:/tmp/uppy-companion
+
+volumes:
+  companion-data:
