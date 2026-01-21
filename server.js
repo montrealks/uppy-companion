@@ -4,20 +4,20 @@ const companion = require('@uppy/companion');
 const options = {
   providerOptions: {
     drive: {
-      key: process.env.GOOGLE_CLIENT_ID,
-      secret: process.env.GOOGLE_CLIENT_SECRET,
+      key: process.env.COMPANION_GOOGLE_KEY || process.env.GOOGLE_CLIENT_ID,
+      secret: process.env.COMPANION_GOOGLE_SECRET || process.env.GOOGLE_CLIENT_SECRET,
     },
     dropbox: {
-      key: process.env.DROPBOX_KEY,
-      secret: process.env.DROPBOX_SECRET,
+      key: process.env.COMPANION_DROPBOX_KEY || process.env.DROPBOX_KEY,
+      secret: process.env.COMPANION_DROPBOX_SECRET || process.env.DROPBOX_SECRET,
     },
     onedrive: {
-      key: process.env.ONEDRIVE_KEY,
-      secret: process.env.ONEDRIVE_SECRET,
+      key: process.env.COMPANION_ONEDRIVE_KEY || process.env.ONEDRIVE_KEY,
+      secret: process.env.COMPANION_ONEDRIVE_SECRET || process.env.ONEDRIVE_SECRET,
     },
     unsplash: {
-      key: process.env.UNSPLASH_KEY,
-      secret: process.env.UNSPLASH_SECRET,
+      key: process.env.COMPANION_UNSPLASH_KEY || process.env.UNSPLASH_KEY,
+      secret: process.env.COMPANION_UNSPLASH_SECRET || process.env.UNSPLASH_SECRET,
     },
   },
   server: {
@@ -39,4 +39,9 @@ const port = process.env.PORT || 3020;
 
 app.listen(port, () => {
   console.log(`Uppy Companion running on port ${port}`);
+  console.log('Configured providers:');
+  console.log('  - drive:', options.providerOptions.drive.key ? 'configured' : 'NOT CONFIGURED');
+  console.log('  - dropbox:', options.providerOptions.dropbox.key ? 'configured' : 'NOT CONFIGURED');
+  console.log('  - onedrive:', options.providerOptions.onedrive.key ? 'configured' : 'NOT CONFIGURED');
+  console.log('  - unsplash:', options.providerOptions.unsplash.key ? 'configured' : 'NOT CONFIGURED');
 });
