@@ -16,8 +16,8 @@ const options = {
       secret: process.env.ONEDRIVE_SECRET,
     },
     unsplash: {
-      key: process.env.UNSPLASH_KEY,
-      secret: process.env.UNSPLASH_SECRET,
+      key: process.env.COMPANION_UNSPLASH_KEY || process.env.UNSPLASH_KEY,
+      secret: process.env.COMPANION_UNSPLASH_SECRET || process.env.UNSPLASH_SECRET,
     },
   },
   server: {
