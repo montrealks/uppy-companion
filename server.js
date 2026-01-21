@@ -26,6 +26,13 @@ const options = {
       secret: process.env.COMPANION_UNSPLASH_SECRET || process.env.UNSPLASH_SECRET,
     },
   },
+  // Also add as searchProviders for backwards compatibility
+  searchProviders: {
+    unsplash: {
+      key: process.env.COMPANION_UNSPLASH_KEY || process.env.UNSPLASH_KEY,
+      secret: process.env.COMPANION_UNSPLASH_SECRET || process.env.UNSPLASH_SECRET,
+    },
+  },
   server: {
     host: process.env.COMPANION_HOST || 'localhost:3020',
     protocol: process.env.COMPANION_PROTOCOL || 'http',
