@@ -1,9 +1,22 @@
 services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - companion
+
   companion:
     build: .
     restart: unless-stopped
-    ports:
-      - "3020:3020"
+    expose:
+      - "3020"
     env_file:
       - .env
     volumes:
@@ -11,3 +24,5 @@ services:
 
 volumes:
   companion-data:
+  caddy-data:
+  caddy-config:
