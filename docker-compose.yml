@@ -5,8 +5,8 @@ services:
     ports:
       - "80:80"
       - "443:443"
+    command: caddy reverse-proxy --from companion.kboodle.com --to companion:3020
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile
       - caddy-data:/data
       - caddy-config:/config
     depends_on:

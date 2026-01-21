@@ -1,3 +1,0 @@
-companion.kboodle.com {
-    reverse_proxy companion:3020
-}
