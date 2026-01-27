@@ -1,0 +1,24 @@
+# Production Docker Compose for Uppy Companion
+# Usage: docker compose -f docker-compose.prod.yml up -d
+
+services:
+  companion:
+    build: .
+    container_name: uppy-companion
+    restart: unless-stopped
+    expose:
+      - "3020"
+    env_file:
+      - .env
+    volumes:
+      - companion-data:/tmp/uppy-companion
+    networks:
+      - default
+      - caddy
+
+volumes:
+  companion-data:
+
+networks:
+  caddy:
+    external: true
