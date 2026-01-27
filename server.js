@@ -1,5 +1,10 @@
 require('dotenv').config();
-const companion = require('@uppy/companion');
+const companionStandalone = require('@uppy/companion/lib/standalone');
+
+const unsplashConfig = {
+  key: process.env.COMPANION_UNSPLASH_KEY || process.env.UNSPLASH_KEY,
+  secret: process.env.COMPANION_UNSPLASH_SECRET || process.env.UNSPLASH_SECRET,
+};
 
 const options = {
   providerOptions: {
@@ -15,10 +20,10 @@ const options = {
       key: process.env.COMPANION_ONEDRIVE_KEY || process.env.ONEDRIVE_KEY,
       secret: process.env.COMPANION_ONEDRIVE_SECRET || process.env.ONEDRIVE_SECRET,
     },
-    unsplash: {
-      key: process.env.COMPANION_UNSPLASH_KEY || process.env.UNSPLASH_KEY,
-      secret: process.env.COMPANION_UNSPLASH_SECRET || process.env.UNSPLASH_SECRET,
-    },
+    unsplash: unsplashConfig,
+  },
+  searchProviders: {
+    unsplash: unsplashConfig,
   },
   server: {
     host: process.env.COMPANION_HOST || 'localhost:3020',
@@ -30,10 +35,10 @@ const options = {
   uploadUrls: (process.env.UPLOAD_URLS || '').split(',').filter(Boolean),
   corsOrigins: (process.env.CORS_ORIGINS || '').split(',').filter(Boolean),
   debug: process.env.NODE_ENV !== 'production',
-  enableGooglePickerEndpoint: process.env.COMPANION_ENABLE_GOOGLE_PICKER_ENDPOINT === 'true',
 };
 
-const { app } = companion.app(options);
+// Use standalone which includes session middleware
+const { app } = companionStandalone(options);
 
 const port = process.env.PORT || 3020;
 
@@ -41,7 +46,5 @@ app.listen(port, () => {
   console.log(`Uppy Companion running on port ${port}`);
   console.log('Configured providers:');
   console.log('  - drive:', options.providerOptions.drive.key ? 'configured' : 'NOT CONFIGURED');
-  console.log('  - dropbox:', options.providerOptions.dropbox.key ? 'configured' : 'NOT CONFIGURED');
-  console.log('  - onedrive:', options.providerOptions.onedrive.key ? 'configured' : 'NOT CONFIGURED');
   console.log('  - unsplash:', options.providerOptions.unsplash.key ? 'configured' : 'NOT CONFIGURED');
 });
