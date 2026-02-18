@@ -35,6 +35,7 @@ const options = {
   uploadUrls: (process.env.UPLOAD_URLS || '').split(',').filter(Boolean),
   corsOrigins: (process.env.CORS_ORIGINS || '').split(',').filter(Boolean),
   debug: process.env.NODE_ENV !== 'production',
+  enableGooglePickerEndpoint: process.env.COMPANION_ENABLE_GOOGLE_PICKER_ENDPOINT === 'true',
 };
 
 // Use standalone which includes session middleware
